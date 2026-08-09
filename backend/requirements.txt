@@ -1,0 +1,11 @@
+# Orchestrator Backend — Python Dependencies
+# Install with:  pip install -r requirements.txt
+fastapi>=0.128
+uvicorn[standard]>=0.39
+httpx[http2]>=0.28
+qdrant-client>=1.16
+pydantic>=2.13
+pydantic-settings>=2.11
+python-dotenv>=1.2
+pytest>=8.4
+pytest-asyncio>=1.2
