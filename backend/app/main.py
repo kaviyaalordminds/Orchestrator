@@ -5,6 +5,8 @@ import logging
 
 from app.api.chat import router as chat_router
 from app.api.rag import router as rag_router, get_rag
+from app.api.audio import router as audio_router
+from app.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,16 +50,70 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # Lock down to specific origins in production
-    allow_credentials=True,
+    allow_origins=["*"],       # Local development; restrict in production
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(chat_router, prefix="/api/v1", tags=["Chat"])
 app.include_router(rag_router, prefix="/api/v1/rag", tags=["RAG Admin"])
+app.include_router(audio_router, prefix="/api/v1/audio", tags=["Audio"])
 
 
 @app.get("/api/v1/health", tags=["System"])
-def health_check():
-    return {"status": "ok", "service": "Orchestrator Backend", "version": "1.1.0"}
+async def health_check():
+    """Real dependency health check; does not claim success when dependencies are down."""
+    rag = get_rag()
+    result = {
+        "status": "ok",
+        "service": "Orchestrator Backend",
+        "version": "1.1.0",
+        "dependencies": {
+            "qdrant": rag.vector_store.get_stats(),
+            "obsidian": {"connected": False},
+            "ollama": {"connected": False, "model": rag.embedder.model},
+        },
+    }
+
+    try:
+        health = await rag.obsidian.check_health()
+        result["dependencies"]["obsidian"] = {
+            "connected": True,
+            "status": health.get("status"),
+            "authenticated": health.get("authenticated"),
+            "version": health.get("versions", {}).get("self"),
+        }
+    except Exception as exc:
+        result["dependencies"]["obsidian"] = {
+            "connected": False,
+            "error": str(exc),
+        }
+        result["status"] = "degraded"
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{settings.OLLAMA_URL.rstrip('/')}/api/tags")
+            response.raise_for_status()
+            models = [m.get("name") for m in response.json().get("models", [])]
+            result["dependencies"]["ollama"] = {
+                "connected": True,
+                "model": rag.embedder.model,
+                "chat_model": settings.LLM_MODEL,
+                "models": models,
+                "chat_model_available": settings.LLM_MODEL in models,
+                "embedding_model_available": rag.embedder.model in models,
+            }
+            if settings.LLM_MODEL not in models:
+                result["status"] = "degraded"
+    except Exception as exc:
+        result["dependencies"]["ollama"] = {
+            "connected": False,
+            "chat_model": settings.LLM_MODEL,
+            "embedding_model": rag.embedder.model,
+            "error": str(exc),
+        }
+        result["status"] = "degraded"
+
+    return result

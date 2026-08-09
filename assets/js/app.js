@@ -11,7 +11,7 @@ const app = {
     notifications: []
   },
 
-  apiBase: 'http://localhost:8000',
+  apiBase: 'http://127.0.0.1:8000',
 
   getAuthHeaders() {
     const token = localStorage.getItem('jwt_token');

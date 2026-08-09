@@ -211,7 +211,7 @@ def _rag_with_memory() -> RAGService:
     rag = RAGService.__new__(RAGService)
     rag.obsidian = ObsidianClient()
     rag.embedder = __import__("app.services.embedding", fromlist=["EmbeddingService"]).EmbeddingService()
-    rag.vector_store = QdrantVectorStore(location=":memory:", collection_name="test_rag", vector_size=384)
+    rag.vector_store = QdrantVectorStore(location=":memory:", collection_name="test_rag", vector_size=__import__("app.config", fromlist=["settings"]).settings.QDRANT_VECTOR_SIZE)
     return rag
 
 

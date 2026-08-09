@@ -72,7 +72,7 @@ const chatAgent = {
     const title = document.getElementById('chatTitle');
     const model = document.getElementById('chatModel');
     if (title) title.textContent = 'New Conversation';
-    if (model) model.textContent = 'GPT-4 Turbo';
+    if (model) model.textContent = 'Local LLM + Obsidian';
     this.showWelcome();
     this.renderConversationList();
   },
@@ -99,7 +99,7 @@ const chatAgent = {
     const title = document.getElementById('chatTitle');
     const model = document.getElementById('chatModel');
     if (title) title.textContent = conv.title;
-    if (model) model.textContent = 'GPT-4 Turbo';
+    if (model) model.textContent = 'Local LLM + Obsidian';
     this.renderMessages();
     this.renderConversationList();
   },
@@ -202,27 +202,27 @@ const chatAgent = {
     container.scrollTop = container.scrollHeight;
 
     let response = "";
+    let sources = [];
     try {
       const apiMsgs = this.messages.map(m => ({
         role: m.role === 'ai' || m.role === 'assistant' ? 'assistant' : 'user',
         content: m.content
       }));
-      const res = await fetch(`${app.apiBase}/api/v1/chat`, {
+
+      const data = await app.api('/api/v1/chat', {
         method: 'POST',
-        headers: app.getAuthHeaders(),
         body: JSON.stringify({ messages: apiMsgs })
       });
-      const data = await res.json();
-      let sources = [];
-      if (data.success) {
-        response = data.data.reply;
-        sources = data.data.sources || [];
-      } else {
-        response = "Sorry, I encountered an error: " + (data.error?.message || "Generation failed");
+
+      if (!data?.success || !data?.data?.reply) {
+        throw new Error(data?.error?.message || data?.detail || 'Backend returned no AI response.');
       }
+
+      response = data.data.reply;
+      sources = data.data.sources || [];
     } catch (err) {
       console.error("Chat API error:", err);
-      response = this.generateResponse(text);
+      response = `I couldn't get a response from the AI backend. ${err.message || 'Check the backend logs.'}`;
     }
 
     const typingEl = document.getElementById(typingId);
@@ -321,13 +321,14 @@ Would you like me to dive deeper into any of these areas?`;
     }
   },
 
-  regenerateMessage(idx) {
-    app.showToast('Regenerate', 'Regenerating response...', 'info');
-    setTimeout(() => {
-      this.messages[idx].content = this.generateResponse(this.messages[idx - 1]?.content || 'regenerate');
-      this.renderMessages();
-      app.showToast('Complete', 'Response regenerated', 'success');
-    }, 1000);
+  async regenerateMessage(idx) {
+    const previous = this.messages[idx - 1];
+    if (!previous || previous.role !== 'user') return;
+    this.messages = this.messages.slice(0, idx);
+    this.renderMessages();
+    const input = document.getElementById('chatInput');
+    if (input) input.value = previous.content;
+    await this.sendMessage();
   },
 
   likeMessage(idx) {

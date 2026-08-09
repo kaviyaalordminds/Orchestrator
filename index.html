@@ -382,9 +382,9 @@
             <div class="control-group">
               <label class="control-label">Audio Type</label>
               <select class="control-select" id="audioType">
+                <option>Voice Over</option>
                 <option>Background Music</option>
                 <option>Sound Effect</option>
-                <option>Voice Over</option>
                 <option>Ambient Sound</option>
                 <option>Jingle</option>
               </select>
@@ -423,6 +423,7 @@
                   <p>Your generated audio will appear here</p>
                 </div>
               </div>
+              <audio id="audioElement" preload="metadata" style="display:none;"></audio>
               <div class="audio-player-controls" id="audioPlayerControls" style="display:none;">
                 <button class="player-btn" onclick="audioAgent.togglePlay()"><i class="bi bi-play-fill" id="audioPlayIcon"></i></button>
                 <div class="player-progress">

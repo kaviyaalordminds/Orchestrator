@@ -11,6 +11,13 @@ const audioAgent = {
 
   init() {
     this.setupEventListeners();
+    const audio = document.getElementById('audioElement');
+    if (audio) {
+      audio.addEventListener('play', () => this.updatePlaybackUI());
+      audio.addEventListener('pause', () => this.updatePlaybackUI());
+      audio.addEventListener('timeupdate', () => this.updatePlaybackUI());
+      audio.addEventListener('ended', () => this.updatePlaybackUI());
+    }
   },
 
   setupEventListeners() {
@@ -28,7 +35,8 @@ const audioAgent = {
   switchTab(tab) {
     this.currentTab = tab;
     document.querySelectorAll('.audio-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
+    const tabButton = document.querySelector(`.audio-tab[onclick="audioAgent.switchTab('${tab}')"]`);
+    if (tabButton) tabButton.classList.add('active');
     document.querySelectorAll('.audio-panel').forEach(p => p.classList.remove('active'));
     document.getElementById(`audio-panel-${tab}`).classList.add('active');
   },
@@ -48,40 +56,55 @@ const audioAgent = {
     const duration = document.getElementById('audioDuration').value;
     const type = document.getElementById('audioType').value;
 
-    app.showToast('Audio Generation', `Creating ${duration}s of ${type.toLowerCase()}...`, 'info');
-
     try {
-      const res = await fetch(`${app.apiBase}/api/v1/audio/synthesize`, {
+      const data = await app.api('/api/v1/audio/synthesize', {
         method: 'POST',
-        headers: app.getAuthHeaders(),
-        body: JSON.stringify({ text: prompt, voice: "alloy", speed: 1.0 })
+        body: JSON.stringify({
+          text: prompt,
+          voice: 'Samantha',
+          speed: 1.0,
+          type,
+          duration: Number(duration)
+        })
       });
-      const data = await res.json();
-      if (data.success) {
-        this.audioUrl = app.apiBase + data.data.audio_url;
+
+      if (!data?.success || !data?.data?.audio_url) {
+        throw new Error(data?.error?.message || data?.detail || 'Audio backend returned no audio file.');
       }
+
+      this.audioUrl = `${app.apiBase}${data.data.audio_url}`;
+
+      const audio = document.getElementById('audioElement');
+      if (audio) {
+        audio.src = this.audioUrl;
+        audio.load();
+      }
+
+      const waveform = document.getElementById('audioWaveform');
+      if (waveform) waveform.innerHTML = this.generateWaveformBars();
+      document.getElementById('audioPlayerControls').style.display = 'flex';
+      document.getElementById('audioTotalTime').textContent = 'Ready';
+
+      this.audioHistory.unshift({
+        id: Date.now(),
+        prompt,
+        type,
+        duration,
+        mood: this.selectedMood,
+        audioUrl: this.audioUrl,
+        timestamp: new Date().toLocaleString()
+      });
+      this.renderAudioHistory();
+
+      app.showToast('Audio Ready', 'Backend generated the audio successfully.', 'success');
     } catch (err) {
-      console.error("Audio synth error:", err);
+      console.error('Audio synth error:', err);
+      this.audioUrl = null;
+      app.showToast('Audio Generation Failed', err.message || 'Check the backend logs.', 'error');
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
     }
-
-    const waveform = document.getElementById('audioWaveform');
-    waveform.innerHTML = this.generateWaveformBars();
-    document.getElementById('audioPlayerControls').style.display = 'flex';
-    document.getElementById('audioTotalTime').textContent = `0:${duration.padStart(2, '0')}`;
-
-    this.audioHistory.unshift({
-      id: Date.now(),
-      prompt: prompt,
-      type: type,
-      duration: duration,
-      mood: this.selectedMood,
-      timestamp: new Date().toLocaleString()
-    });
-    this.renderAudioHistory();
-
-    btn.innerHTML = originalText;
-    btn.disabled = false;
-    app.showToast('Audio Ready', `${duration}s ${type} generated`, 'success');
   },
 
   generateWaveformBars() {
@@ -116,34 +139,51 @@ const audioAgent = {
   },
 
   togglePlay() {
-    this.isPlaying = !this.isPlaying;
-    const icon = document.getElementById('audioPlayIcon');
-    icon.className = this.isPlaying ? 'bi bi-pause-fill' : 'bi bi-play-fill';
-    if (this.isPlaying) {
-      this.simulatePlayback();
+    const audio = document.getElementById('audioElement');
+    if (!audio || !this.audioUrl) {
+      app.showToast('No Audio', 'Generate audio first.', 'warning');
+      return;
+    }
+
+    if (audio.paused) {
+      audio.play().catch(err => {
+        console.error('Audio playback error:', err);
+        app.showToast('Playback Error', 'The generated audio could not be played.', 'error');
+      });
+    } else {
+      audio.pause();
     }
   },
 
-  simulatePlayback() {
-    let progress = 0;
+  updatePlaybackUI() {
+    const audio = document.getElementById('audioElement');
+    if (!audio) return;
+    const icon = document.getElementById('audioPlayIcon');
+    if (icon) icon.className = audio.paused ? 'bi bi-play-fill' : 'bi bi-pause-fill';
+
     const fill = document.getElementById('audioProgressFill');
+    if (fill && Number.isFinite(audio.duration) && audio.duration > 0) {
+      fill.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
+    }
+
     const time = document.getElementById('audioCurrentTime');
-    const interval = setInterval(() => {
-      if (!this.isPlaying) { clearInterval(interval); return; }
-      progress += 1;
-      fill.style.width = progress + '%';
-      const secs = Math.floor((progress / 100) * 30);
-      time.textContent = `0:${secs.toString().padStart(2, '0')}`;
-      if (progress >= 100) {
-        this.isPlaying = false;
-        document.getElementById('audioPlayIcon').className = 'bi bi-play-fill';
-        clearInterval(interval);
-      }
-    }, 300);
+    if (time) {
+      const sec = Math.floor(audio.currentTime || 0);
+      time.textContent = `0:${String(sec).padStart(2, '0')}`;
+    }
   },
 
   downloadAudio() {
-    app.showToast('Download', 'Audio download started', 'success');
+    if (!this.audioUrl) {
+      app.showToast('No Audio', 'Generate audio first.', 'warning');
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = this.audioUrl;
+    link.download = 'orchestrator-audio.wav';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   },
 
   selectVoiceSample() {
@@ -190,19 +230,18 @@ const audioAgent = {
           body: formData
         });
         const data = await res.json();
-        if (data.success) {
-          this.transcriptText = data.data.text;
-        } else {
-          this.transcriptText = `Transcribed content for ${file.name}: Audio transcription complete.`;
+        if (!data?.success || !data?.data?.text) {
+          throw new Error(data?.error?.message || data?.detail || 'Transcription backend returned no text.');
         }
+        this.transcriptText = data.data.text;
+        document.getElementById('transcribeText').innerHTML = this.transcriptText.replace(/\n/g, '<br>');
+        document.getElementById('transcribeActions').style.display = 'flex';
+        app.showToast('Transcription Complete', 'Audio transcribed successfully', 'success');
       } catch (err) {
         console.error("Transcribe API error:", err);
-        this.transcriptText = `Transcribed content for ${file.name}: Audio transcription generated successfully.`;
+        document.getElementById('transcribeActions').style.display = 'none';
+        app.showToast('Transcription Failed', err.message || 'Check the backend logs.', 'error');
       }
-
-      document.getElementById('transcribeText').innerHTML = this.transcriptText.replace(/\n/g, '<br>');
-      document.getElementById('transcribeActions').style.display = 'flex';
-      app.showToast('Transcription Complete', 'Audio transcribed successfully', 'success');
     }
   },
 

@@ -28,13 +28,21 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = Field(default=500)   # words per chunk
     RAG_CHUNK_OVERLAP: int = Field(default=100) # words of overlap between chunks
 
+    # ─── Audio Studio ─────────────────────────────────────────────────────────
+    AUDIO_PROVIDER: str = Field(default="macos_say")
+    AUDIO_OUTPUT_DIR: str = Field(default=str(_BASE_DIR / "data" / "audio"))
+    AUDIO_DEFAULT_VOICE: str = Field(default="Samantha")
+    AUDIO_DEFAULT_SPEED: int = Field(default=175)
+
     # ─── Admin API Security ──────────────────────────────────────────────────
     ADMIN_API_KEY: str = Field(default="")     # Protect /rag/index & /rag/reindex — set in .env
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    # Resolve .env relative to backend/, not the current shell working directory.
+    model_config = {"env_file": str(_BASE_DIR / ".env"), "extra": "ignore"}
 
 
 settings = Settings()
 
 # Ensure persistent Qdrant directory exists
 Path(settings.QDRANT_LOCATION).mkdir(parents=True, exist_ok=True)
+Path(settings.AUDIO_OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
