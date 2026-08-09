@@ -21,6 +21,7 @@ class SynthesizeRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
     type: str = "Voice Over"
     duration: int | None = Field(default=None, ge=1, le=600)
+    mood: str = Field(default="epic", min_length=1, max_length=32)
 
 
 @router.get("/health")
@@ -45,6 +46,7 @@ async def synthesize(req: SynthesizeRequest):
             speed=req.speed,
             audio_type=req.type,
             duration=req.duration,
+            mood=req.mood,
         )
         return {"success": True, "data": result}
     except ValueError as exc:

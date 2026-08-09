@@ -1,4 +1,4 @@
-#!/Users/bharath/Orchestrator/backend/venv/bin/python
+#!/Users/bharath/Orchestrator/backend/venv/bin/python3
 import sys
 from pygments.cmdline import main
 if __name__ == '__main__':

@@ -4,8 +4,10 @@ from typing import List
 
 from app.api.rag import get_rag
 from app.services.chat_intent import classify_chat
+from app.services.chat_store import ChatStore
 
 router = APIRouter()
+_chat_store = ChatStore()
 
 
 class ChatMessage(BaseModel):
@@ -16,6 +18,31 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     include_sources: bool = False
+
+
+class Conversation(BaseModel):
+    id: int
+    title: str
+    preview: str = ""
+    timestamp: str
+    messages: List[ChatMessage]
+
+
+@router.get("/chat/conversations")
+async def list_conversations():
+    return {"success": True, "data": await _chat_store.list()}
+
+
+@router.post("/chat/conversations")
+async def save_conversation(conversation: Conversation):
+    saved = await _chat_store.upsert(conversation.model_dump())
+    return {"success": True, "data": saved}
+
+
+@router.delete("/chat/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    deleted = await _chat_store.delete(conversation_id)
+    return {"success": True, "data": {"deleted": deleted}}
 
 
 @router.post("/chat")

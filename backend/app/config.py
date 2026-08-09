@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     AUDIO_OUTPUT_DIR: str = Field(default=str(_BASE_DIR / "data" / "audio"))
     AUDIO_DEFAULT_VOICE: str = Field(default="Samantha")
     AUDIO_DEFAULT_SPEED: int = Field(default=175)
+    CHAT_HISTORY_FILE: str = Field(default=str(_BASE_DIR / "data" / "chat_history.json"))
 
     # ─── Admin API Security ──────────────────────────────────────────────────
     ADMIN_API_KEY: str = Field(default="")     # Protect /rag/index & /rag/reindex — set in .env

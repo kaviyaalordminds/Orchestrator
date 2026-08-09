@@ -4,27 +4,14 @@
    ============================================ */
 
 const chatAgent = {
-  conversations: [
-    { id: 1, title: 'Website Design Discussion', preview: 'How should we structure the hero section?', timestamp: '2 hours ago', messages: [
-      { role: 'user', content: 'How should we structure the hero section for the AI company website?' },
-      { role: 'ai', content: 'For an AI company hero section, I recommend a bold headline with a gradient text effect, a subheading that clearly states the value proposition, and a prominent CTA button. Consider adding a subtle animated background or 3D element to convey innovation.' }
-    ]},
-    { id: 2, title: 'Q4 Strategy Questions', preview: 'What metrics should we track?', timestamp: '5 hours ago', messages: [
-      { role: 'user', content: 'What metrics should we track for Q4?' },
-      { role: 'ai', content: 'Key Q4 metrics: Revenue growth, customer acquisition cost, churn rate, net promoter score, and product adoption rate.' }
-    ]},
-    { id: 3, title: 'Image Generation Tips', preview: 'Best prompts for product photos', timestamp: 'Yesterday', messages: [
-      { role: 'user', content: 'Best prompts for product photos?' },
-      { role: 'ai', content: 'Use specific lighting descriptions, mention camera angles, include background details, and specify the product material for best results.' }
-    ]}
-  ],
+  conversations: [],
   currentConversation: null,
   messages: [],
 
   init() {
     if (!document.getElementById('chatMessages') || !document.getElementById('conversationList')) return;
     this.renderConversationList();
-    this.newConversation();
+    this.loadPersistedConversations();
 
     // Auto-grow the chat textarea
     const textarea = document.getElementById('chatInput');
@@ -33,6 +20,53 @@ const chatAgent = {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
       });
+    }
+  },
+
+  async loadPersistedConversations() {
+    try {
+      const data = await app.api('/api/v1/chat/conversations');
+      const saved = Array.isArray(data?.data) ? data.data : [];
+      this.conversations = saved.map(conv => ({
+        ...conv,
+        id: Number(conv.id),
+        messages: Array.isArray(conv.messages) ? conv.messages : []
+      }));
+      this.renderConversationList();
+
+      // Restore the most recent conversation after a page refresh.
+      if (this.conversations.length > 0 && this.messages.length === 0) {
+        this.loadConversation(this.conversations[0].id);
+      } else if (this.conversations.length === 0) {
+        this.showWelcome();
+      }
+    } catch (err) {
+      console.error('Failed to load chat history:', err);
+      this.conversations = [];
+      this.renderConversationList();
+      this.showWelcome();
+    }
+  },
+
+  async persistConversation(conversation) {
+    if (!conversation) return;
+    try {
+      await app.api('/api/v1/chat/conversations', {
+        method: 'POST',
+        body: JSON.stringify(conversation)
+      });
+    } catch (err) {
+      console.error('Failed to persist conversation:', err);
+    }
+  },
+
+  async removePersistedConversation(id) {
+    try {
+      await app.api(`/api/v1/chat/conversations/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
     }
   },
 
@@ -104,10 +138,11 @@ const chatAgent = {
     this.renderConversationList();
   },
 
-  deleteConversation(id) {
+  async deleteConversation(id) {
     this.conversations = this.conversations.filter(c => c.id !== id);
     if (this.currentConversation?.id === id) this.newConversation();
     else this.renderConversationList();
+    await this.removePersistedConversation(id);
     app.showToast('Deleted', 'Conversation removed', 'info');
   },
 
@@ -216,6 +251,30 @@ const chatAgent = {
     }
 
     this.messages.push({ role: 'user', content: text });
+
+    // Create/persist the conversation immediately. This protects the user's
+    // message even if the AI request fails or the page is refreshed while it
+    // is waiting for a response.
+    if (!this.currentConversation) {
+      const newConv = {
+        id: Date.now(),
+        title: text.substring(0, 30) + (text.length > 30 ? '...' : ''),
+        preview: text.substring(0, 50),
+        timestamp: new Date().toISOString(),
+        messages: [...this.messages]
+      };
+      this.conversations.unshift(newConv);
+      this.currentConversation = newConv;
+      const title = document.getElementById('chatTitle');
+      if (title) title.textContent = newConv.title;
+      this.renderConversationList();
+    } else {
+      this.currentConversation.messages = [...this.messages];
+      this.currentConversation.preview = text.substring(0, 50);
+      this.currentConversation.timestamp = new Date().toISOString();
+    }
+    await this.persistConversation(this.currentConversation);
+
     this.renderMessages();
     input.value = '';
     input.style.height = 'auto';
@@ -270,22 +329,13 @@ const chatAgent = {
     this.messages.push({ role: 'ai', content: response, sources: sources });
     this.renderMessages();
 
-    // Save to conversation
-    if (!this.currentConversation) {
-      const newConv = {
-        id: Date.now(),
-        title: text.substring(0, 30) + (text.length > 30 ? '...' : ''),
-        preview: text.substring(0, 50),
-        timestamp: 'Just now',
-        messages: [...this.messages]
-      };
-      this.conversations.unshift(newConv);
-      this.currentConversation = newConv;
-      document.getElementById('chatTitle').textContent = newConv.title;
-      this.renderConversationList();
-    } else {
+    // Persist the completed assistant response as well.
+    if (this.currentConversation) {
       this.currentConversation.messages = [...this.messages];
       this.currentConversation.preview = text.substring(0, 50);
+      this.currentConversation.timestamp = new Date().toISOString();
+      await this.persistConversation(this.currentConversation);
+      this.renderConversationList();
     }
   },
 

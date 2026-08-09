@@ -64,7 +64,8 @@ const audioAgent = {
           voice: 'Samantha',
           speed: 1.0,
           type,
-          duration: Number(duration)
+          duration: Number(duration),
+          mood: this.selectedMood
         })
       });
 
@@ -96,7 +97,7 @@ const audioAgent = {
       });
       this.renderAudioHistory();
 
-      app.showToast('Audio Ready', 'Backend generated the audio successfully.', 'success');
+      app.showToast('Audio Ready', `Backend generated ${this.selectedMood} mood audio successfully.`, 'success');
     } catch (err) {
       console.error('Audio synth error:', err);
       this.audioUrl = null;
