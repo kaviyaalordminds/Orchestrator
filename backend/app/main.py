@@ -40,7 +40,7 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(
     title="Orchestrator Backend API",
-    version="1.1.0",
+    version="1.2.0",
     description=(
         "Orchestrator AI backend — integrates Obsidian Local REST API "
         "with Qdrant RAG to power the company knowledge assistant."
@@ -68,7 +68,8 @@ async def health_check():
     result = {
         "status": "ok",
         "service": "Orchestrator Backend",
-        "version": "1.1.0",
+        "version": "1.2.0",
+        "chat_router": "2.0-intent-routing",
         "dependencies": {
             "qdrant": rag.vector_store.get_stats(),
             "obsidian": {"connected": False},
@@ -117,3 +118,14 @@ async def health_check():
         result["status"] = "degraded"
 
     return result
+
+
+@app.get("/api/v1/build")
+async def build_info():
+    return {
+        "service": "Orchestrator",
+        "build": "chat-routing-v3",
+        "chat_routing": "intent + dedicated direct endpoint",
+        "vault_for_greetings": False,
+        "note": "Restart the backend after updating source files."
+    }

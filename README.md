@@ -246,3 +246,10 @@ Orchestrator/
 - API keys are loaded from `.env` and never logged or returned in API responses.
 - Admin indexing endpoints require `X-Admin-Key` header when `ADMIN_API_KEY` is set.
 - The vector store contains only note content chunks — never credentials or system metadata.
+
+
+## Chat routing behavior
+
+Chat now uses intent routing. Greetings and ordinary general questions are sent directly to the configured LLM without Obsidian retrieval. Personal, internal, project-specific, and explicitly Obsidian-related questions use the existing RAG pipeline. Obsidian source metadata is hidden from normal chat responses; `/api/v1/chat` accepts `include_sources=true` only when source inspection is explicitly requested.
+
+The current uploaded backend uses Ollama as its LLM provider. There is no Claude Code/MCP client implementation in this codebase yet, so the direct path currently means the configured LLM (Ollama). Claude Code can be integrated later without changing the routing contract.

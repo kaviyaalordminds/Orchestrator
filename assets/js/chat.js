@@ -72,7 +72,7 @@ const chatAgent = {
     const title = document.getElementById('chatTitle');
     const model = document.getElementById('chatModel');
     if (title) title.textContent = 'New Conversation';
-    if (model) model.textContent = 'Local LLM + Obsidian';
+    if (model) model.textContent = 'AI Assistant';
     this.showWelcome();
     this.renderConversationList();
   },
@@ -99,7 +99,7 @@ const chatAgent = {
     const title = document.getElementById('chatTitle');
     const model = document.getElementById('chatModel');
     if (title) title.textContent = conv.title;
-    if (model) model.textContent = 'Local LLM + Obsidian';
+    if (model) model.textContent = 'AI Assistant';
     this.renderMessages();
     this.renderConversationList();
   },
@@ -137,11 +137,9 @@ const chatAgent = {
       content = content.replace(/\* ([^\n]+)/g, '<li>$1</li>');
       content = content.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
 
+      // Source metadata is intentionally not rendered in normal chat.
+      // Users can request sources explicitly through the backend diagnostics API.
       let sourcesHtml = '';
-      if (!isUser && msg.sources && msg.sources.length > 0) {
-        const badges = msg.sources.map(s => `<span class="tool-chip" style="font-size:0.75rem;padding:2px 8px;margin-right:4px;"><i class="bi bi-journal-text"></i> ${s.source_path}</span>`).join('');
-        sourcesHtml = `<div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted);"><strong>Sources:</strong><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${badges}</div></div>`;
-      }
 
       return `
         <div class="message ${isUser ? 'user' : 'ai'}">
@@ -170,6 +168,39 @@ const chatAgent = {
       e.preventDefault();
       this.sendMessage();
     }
+  },
+
+  // Client-side guard: obvious greetings/general chat never enter the RAG endpoint.
+  // The backend has the authoritative classifier too, but this prevents an
+  // accidental/stale RAG response from being displayed for simple greetings.
+  shouldUseVault(text) {
+    const q = (text || '').trim().toLowerCase();
+    if (!q) return false;
+
+    const greetings = [
+      /^(hi|hello|hey|hiya|heyy|good morning|good afternoon|good evening)[!.?,\s]*$/,
+      /^(hi|hello|hey)[,\s]+how are you(?: doing)?[?.!]*$/,
+      /^how are you(?: doing)?[?.!]*$/,
+      /^how('?s| is) it going[?.!]*$/,
+      /^what's up[?.!]*$/,
+      /^how have you been[?.!]*$/
+    ];
+    if (greetings.some(r => r.test(q))) return false;
+
+    const vaultSignals = [
+      /\bmy\b/, /\bour\b/, /\bwe\b/, /\bpersonal\b/, /\bproject\b/,
+      /\binternal\b/, /\bcompany\b/, /\btrade(s|ing)?\b/, /\bportfolio\b/,
+      /\bstrategy\b/, /\bstrategies\b/, /\bmental model\b/, /\bobsidian\b/,
+      /\bvault\b/, /\bknowledge base\b/, /\bnotes?\b/, /\baccording to\b/,
+      /\bwhat did i\b/, /\bwhat have i\b/, /\bmy previous\b/, /\bmy past\b/,
+      /\bour documentation\b/, /\bour docs\b/, /\bthis project\b/,
+      /\bthis product\b/, /\barchitecture\b/, /\bimplementation\b/,
+      /\bcodebase\b/, /\bbackend\b/, /\bfrontend\b/, /\bagent\b/,
+      /\borchestrator\b/, /\bobsidian integration\b/, /\baudio studio\b/,
+      /\bproduct launch\b/, /\broadmap\b/, /\brequirements\b/,
+      /\bconfiguration\b/
+    ];
+    return vaultSignals.some(r => r.test(q));
   },
 
   async sendMessage() {
@@ -209,9 +240,18 @@ const chatAgent = {
         content: m.content
       }));
 
-      const data = await app.api('/api/v1/chat', {
+      // Obvious/general messages are sent to a dedicated direct endpoint.
+      // Project/personal messages use the normal intent-routed chat endpoint.
+      const endpoint = this.shouldUseVault(text)
+        ? '/api/v1/chat'
+        : '/api/v1/chat/direct';
+
+      const data = await app.api(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ messages: apiMsgs })
+        body: JSON.stringify({
+          messages: apiMsgs,
+          include_sources: false
+        })
       });
 
       if (!data?.success || !data?.data?.reply) {

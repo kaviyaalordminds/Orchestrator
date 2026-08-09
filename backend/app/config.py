@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     OLLAMA_URL: str = Field(default="http://127.0.0.1:11434")
     EMBEDDING_MODEL: str = Field(default="nomic-embed-text")
     LLM_MODEL: str = Field(default="llama3")
+    # Chat routing: direct = normal conversation; vault = internal context when needed.
+    CHAT_ROUTING_ENABLED: bool = Field(default=True)
 
     # ─── RAG Tuning ──────────────────────────────────────────────────────────
     RAG_TOP_K: int = Field(default=5)

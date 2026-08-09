@@ -179,143 +179,179 @@ class RAGService:
 
         return final_chunks[:top_k]
 
-    async def generate_rag_chat_reply(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
-        """Generates RAG-enhanced response with source attribution."""
-        last_user_msg = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        
+    async def generate_rag_chat_reply(
+        self,
+        messages: List[Dict[str, str]],
+        include_sources: bool = False,
+    ) -> Dict[str, Any]:
+        """Route chat between direct LLM conversation and vault-grounded RAG.
+
+        Basic conversation never touches Obsidian. Vault retrieval is only
+        performed when the intent router determines that internal/personal/
+        project context is relevant.
+        """
+        from app.services.chat_intent import ChatMode, classify_chat
+
+        last_user_msg = next(
+            (m["content"] for m in reversed(messages) if m["role"] == "user"),
+            "",
+        )
+        mode = classify_chat(last_user_msg)
+
+        logger.info("Chat routing: mode=%s query=%r", mode.value, last_user_msg[:120])
+
+        if mode == ChatMode.DIRECT:
+            reply = await self._call_llm(
+                messages,
+                context="",
+                use_vault=False,
+            )
+            return {
+                "reply": reply,
+                "sources": [],
+                "mode": mode.value,
+            }
+
+        chunks = await self.retrieve_context(last_user_msg)
         sources = []
-        context_str = ""
-        if last_user_msg:
-            chunks = await self.retrieve_context(last_user_msg)
-            seen_sources = set()
-            formatted_contexts = []
-            
-            for idx, c in enumerate(chunks, 1):
-                src_path = c.get("source_path")
-                title = c.get("title")
-                heading = f" > {c['heading']}" if c.get("heading") else ""
-                
-                formatted_contexts.append(f"--- Context [{idx}] (Source: {src_path}{heading}) ---\n{c['content']}")
-                
-                if src_path and src_path not in seen_sources:
-                    seen_sources.add(src_path)
-                    sources.append({
-                        "title": title,
-                        "source_path": src_path
-                    })
-            
-            if formatted_contexts:
-                context_str = "\n\n".join(formatted_contexts)
+        formatted_contexts = []
+        seen_sources = set()
 
-        # Call local LLM (Ollama or system prompt engine)
-        llm_reply = await self._call_llm(messages, context_str)
-        return {
-            "reply": llm_reply,
-            "sources": sources
-        }
+        for idx, chunk in enumerate(chunks, 1):
+            src_path = chunk.get("source_path")
+            title = chunk.get("title")
+            heading = f" > {chunk['heading']}" if chunk.get("heading") else ""
 
-    async def _call_llm(self, messages: List[Dict[str, str]], context: str) -> str:
-        """Call Ollama LLM with RAG context. Falls back to smart context synthesis if LLM unavailable."""
-        user_query = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+            if chunk.get("content"):
+                formatted_contexts.append(
+                    f"--- Context [{idx}] ---\n{chunk['content']}"
+                )
 
-        system_instruction = (
-            "You are Orchestrator, an AI assistant with direct access to the company's Obsidian knowledge base.\n"
-            "Answer the user's question clearly and helpfully using ONLY the provided Obsidian context below.\n"
-            "Structure your answer with bullet points or short paragraphs where appropriate.\n"
-            "If the context doesn't contain enough information to answer fully, say so clearly — "
-            "do NOT hallucinate or invent internal company details.\n"
-            "Always be concise, accurate, and reference the knowledge base naturally."
+            if src_path and src_path not in seen_sources:
+                seen_sources.add(src_path)
+                sources.append({
+                    "title": title,
+                    "source_path": src_path,
+                })
+
+        context_str = "\n\n".join(formatted_contexts)
+
+        reply = await self._call_llm(
+            messages,
+            context_str,
+            use_vault=True,
         )
 
+        # Source metadata is intentionally hidden from the normal chat API.
+        # It is returned only when explicitly requested for diagnostics/source
+        # inspection.
+        return {
+            "reply": reply,
+            "sources": sources if include_sources else [],
+            "mode": mode.value,
+        }
+
+    async def _call_llm(
+        self,
+        messages: List[Dict[str, str]],
+        context: str,
+        use_vault: bool = False,
+    ) -> str:
+        """Call the configured LLM with either direct or vault-grounded mode."""
+        if use_vault:
+            system_instruction = (
+                "You are Orchestrator, a professional AI assistant. "
+                "The user's question requires internal/personal/project context. "
+                "Use ONLY the supplied Obsidian context for internal facts. "
+                "Treat that context as private reference material, not as text "
+                "to reproduce. Answer the user's actual question directly and "
+                "professionally. Do not mention the Obsidian Knowledge Base, "
+                "RAG, retrieval, context blocks, file paths, source files, "
+                "trade lists, or search results unless the user explicitly asks "
+                "for sources. Do not dump notes or raw context. "
+                "If the supplied context is insufficient, say that the available "
+                "project knowledge does not contain enough information and do "
+                "not invent internal facts."
+            )
+        else:
+            system_instruction = (
+                "You are Orchestrator, a helpful conversational AI assistant. "
+                "Answer the user's message naturally and directly using your "
+                "normal general knowledge and conversation ability. "
+                "Do not query, mention, or depend on the Obsidian Knowledge Base "
+                "for ordinary conversation. Do not fabricate personal or "
+                "project-specific facts."
+            )
+
         prompt_messages = [{"role": "system", "content": system_instruction}]
-        if context:
+
+        if use_vault and context:
             prompt_messages.append({
                 "role": "system",
-                "content": f"=== Obsidian Knowledge Base Context ===\n\n{context}\n\n=== End of Context ==="
+                "content": (
+                    "Private project context for answering this request. "
+                    "Use it internally; never output this block verbatim:\n\n"
+                    f"{context}"
+                ),
             })
+        elif use_vault and not context:
+            prompt_messages.append({
+                "role": "system",
+                "content": (
+                    "No relevant internal context was retrieved. Do not invent "
+                    "internal/project facts."
+                ),
+            })
+
         prompt_messages.extend(messages)
 
-        # ── Try Ollama ────────────────────────────────────────────────────────
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 res = await client.post(
-                    f"{settings.OLLAMA_URL}/api/chat",
+                    f"{settings.OLLAMA_URL.rstrip('/')}/api/chat",
                     json={
                         "model": settings.LLM_MODEL,
                         "messages": prompt_messages,
                         "stream": False,
-                        "options": {"temperature": 0.3}
-                    }
+                        "options": {"temperature": 0.3},
+                    },
                 )
                 if res.status_code == 200:
                     data = res.json()
                     reply = data.get("message", {}).get("content", "").strip()
                     if reply:
-                        logger.info(f"LLM replied via Ollama ({settings.LLM_MODEL})")
+                        logger.info(
+                            "LLM replied via Ollama (%s), mode=%s",
+                            settings.LLM_MODEL,
+                            "vault" if use_vault else "direct",
+                        )
                         return reply
                 else:
-                    logger.warning(f"Ollama returned status {res.status_code}: {res.text[:200]}")
+                    logger.warning(
+                        "Ollama returned status %s: %s",
+                        res.status_code,
+                        res.text[:300],
+                    )
         except httpx.ConnectError:
-            logger.warning("Ollama not reachable — using context-synthesis fallback.")
-        except Exception as e:
-            logger.warning(f"LLM call failed ({e}) — using context-synthesis fallback.")
+            logger.error("Ollama is not reachable at %s", settings.OLLAMA_URL)
+        except Exception as exc:
+            logger.exception("LLM call failed: %s", exc)
 
-        # ── Smart context-synthesis fallback (no LLM needed) ─────────────────
-        # This produces a readable answer from retrieved chunks without hallucinating.
-        return self._synthesize_from_context(user_query, context)
-
-    def _synthesize_from_context(self, query: str, context: str) -> str:
-        """
-        Rule-based answer synthesis from retrieved Obsidian chunks.
-        Used when Ollama is unavailable. Extracts the most relevant sentences
-        from context and assembles a coherent reply.
-        """
-        if not context:
+        # Do not expose raw vault chunks as a fake answer. For direct chat there
+        # is no safe deterministic fallback, so return a clear service error.
+        if use_vault:
+            if context:
+                return (
+                    "I retrieved relevant project knowledge, but the AI model "
+                    "is currently unavailable to turn it into a final answer. "
+                    "Please check the LLM backend and try again."
+                )
             return (
-                "I searched your Obsidian Knowledge Base but couldn't find notes relevant to your question. "
-                "Try rephrasing, or make sure the vault is indexed with POST /api/v1/rag/index."
+                "I couldn't generate the answer because the AI model is "
+                "currently unavailable."
             )
 
-        query_words = {w.lower() for w in query.split() if len(w) > 3}
-
-        # Split context into individual source blocks
-        blocks = [b.strip() for b in context.split("---") if b.strip() and not b.strip().startswith("Context [")]
-        
-        # Score lines by query word overlap
-        scored_lines: List[tuple] = []
-        for block in blocks:
-            for line in block.splitlines():
-                line = line.strip()
-                if not line or len(line) < 20:
-                    continue
-                # Skip markdown headers-only lines
-                clean = line.lstrip("#").strip()
-                if not clean:
-                    continue
-                line_words = {w.lower() for w in line.split()}
-                score = len(query_words & line_words)
-                scored_lines.append((score, clean))
-
-        # Take top lines by relevance, deduplicated
-        seen: set = set()
-        top_lines: List[str] = []
-        for _, line in sorted(scored_lines, key=lambda x: -x[0]):
-            if line not in seen and len(top_lines) < 8:
-                seen.add(line)
-                top_lines.append(f"• {line}")
-
-        if not top_lines:
-            # Fallback: just take first meaningful lines from context
-            for line in context.splitlines():
-                line = line.strip().lstrip("#").strip()
-                if line and len(line) > 25 and not line.startswith("Context [") and not line.startswith("Source:"):
-                    top_lines.append(f"• {line}")
-                if len(top_lines) >= 6:
-                    break
-
-        answer = "\n".join(top_lines)
         return (
-            f"Here's what I found in your Obsidian Knowledge Base about **\"{query}\"**:\n\n"
-            f"{answer}\n\n"
-            f"*Sources are listed below. For richer AI answers, ensure Ollama is running: `ollama serve`*"
+            "I couldn't generate a response because the AI model is currently "
+            "unavailable. Please check the LLM backend and try again."
         )
