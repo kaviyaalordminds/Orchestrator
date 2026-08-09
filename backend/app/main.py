@@ -59,5 +59,38 @@ app.include_router(rag_router, prefix="/api/v1/rag", tags=["RAG Admin"])
 
 
 @app.get("/api/v1/health", tags=["System"])
-def health_check():
-    return {"status": "ok", "service": "Orchestrator Backend", "version": "1.1.0"}
+async def health_check():
+    """
+    Real connectivity health check — not just a static 'ok'. Verifies the
+    vector store and actually reaches out to the Obsidian Local REST API.
+    Never returns the API key or any other secret.
+    """
+    from app.config import settings
+
+    rag = get_rag()
+
+    vector_stats = rag.vector_store.get_stats()
+    vault_reachable = False
+    obsidian_authenticated = None
+    obsidian_error = None
+    try:
+        obsidian_health = await rag.obsidian.check_health()
+        vault_reachable = obsidian_health.get("status") == "OK"
+        obsidian_authenticated = obsidian_health.get("authenticated")
+    except Exception as e:
+        obsidian_error = str(e)
+
+    overall_ok = "error" not in vector_stats and vault_reachable and bool(obsidian_authenticated)
+
+    return {
+        "status": "ok" if overall_ok else "degraded",
+        "service": "Orchestrator Backend",
+        "version": "1.1.0",
+        "backend": True,
+        "obsidian_configured": bool(settings.OBSIDIAN_API_KEY.strip()),
+        "obsidian_reachable": vault_reachable,
+        "obsidian_authenticated": obsidian_authenticated,
+        "obsidian_error": obsidian_error,
+        "vector_store": vector_stats,
+        "obsidian_only": settings.OBSIDIAN_ONLY,
+    }

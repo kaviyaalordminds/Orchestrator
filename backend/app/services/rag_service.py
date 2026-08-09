@@ -87,8 +87,9 @@ class RAGService:
     async def retrieve_context(self, query: str, top_k: int = settings.RAG_TOP_K) -> List[Dict[str, Any]]:
         """Retrieves top relevant note chunks for user query, hybridizing vector search with native Obsidian search."""
         query_vec = await self.embedder.get_embedding(query)
-        results = self.vector_store.search(query_vec, top_k=top_k)
-        
+        raw_results = self.vector_store.search(query_vec, top_k=top_k)
+        results = [r for r in raw_results if r.get("score", 0.0) >= settings.RAG_MIN_SCORE]
+
         retrieved_chunks = []
         seen_paths = set()
 
@@ -182,30 +183,45 @@ class RAGService:
     async def generate_rag_chat_reply(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
         """Generates RAG-enhanced response with source attribution."""
         last_user_msg = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        
+
         sources = []
         context_str = ""
         if last_user_msg:
             chunks = await self.retrieve_context(last_user_msg)
             seen_sources = set()
             formatted_contexts = []
-            
+
             for idx, c in enumerate(chunks, 1):
                 src_path = c.get("source_path")
                 title = c.get("title")
                 heading = f" > {c['heading']}" if c.get("heading") else ""
-                
+
                 formatted_contexts.append(f"--- Context [{idx}] (Source: {src_path}{heading}) ---\n{c['content']}")
-                
+
                 if src_path and src_path not in seen_sources:
                     seen_sources.add(src_path)
                     sources.append({
                         "title": title,
                         "source_path": src_path
                     })
-            
+
             if formatted_contexts:
                 context_str = "\n\n".join(formatted_contexts)
+
+        # OBSIDIAN_ONLY: the vault is the source of truth. If retrieval found
+        # nothing relevant, say so explicitly instead of letting the LLM
+        # answer from its own training data (which would be indistinguishable
+        # from a real vault-grounded answer to the user).
+        if settings.OBSIDIAN_ONLY and not context_str:
+            logger.info("No vault context found for query — returning INSUFFICIENT_VAULT_CONTEXT")
+            return {
+                "reply": (
+                    "INSUFFICIENT_VAULT_CONTEXT — I couldn't find anything relevant to this "
+                    "in your Obsidian vault. Try rephrasing, or confirm the vault is indexed "
+                    "(POST /api/v1/rag/index)."
+                ),
+                "sources": []
+            }
 
         # Call local LLM (Ollama or system prompt engine)
         llm_reply = await self._call_llm(messages, context_str)
