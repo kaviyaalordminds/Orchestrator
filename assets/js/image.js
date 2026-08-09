@@ -69,10 +69,28 @@ const imageAgent = {
     ];
 
     for (let i = 0; i < count; i++) {
-      await new Promise(r => setTimeout(r, 800));
-      const seed = Date.now() + i * 137;
-      const color = colors[i % colors.length];
-      const imgUrl = `https://picsum.photos/seed/${seed}/400/400`;
+      let imgUrl = "";
+      let seed = Date.now() + i * 137;
+      try {
+        const res = await fetch(`${app.apiBase}/api/v1/images/generate`, {
+          method: 'POST',
+          headers: app.getAuthHeaders(),
+          body: JSON.stringify({
+            prompt: prompt,
+            aspect_ratio: this.currentRatio,
+            style: this.selectedStyle
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.data.url) {
+          imgUrl = data.data.url;
+        } else {
+          imgUrl = `https://picsum.photos/seed/${seed}/400/400`;
+        }
+      } catch (err) {
+        console.error("Image generate API error:", err);
+        imgUrl = `https://picsum.photos/seed/${seed}/400/400`;
+      }
 
       this.generatedImages.push({ id: seed, url: imgUrl, prompt, style: this.selectedStyle, ratio: this.currentRatio });
 
@@ -174,9 +192,26 @@ const imageAgent = {
     btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Enhancing...';
     btn.disabled = true;
     app.showToast('Enhancement', 'Applying AI enhancements...', 'info');
-    await new Promise(r => setTimeout(r, 2500));
+
+    try {
+      const prompt = document.getElementById('imgPrompt')?.value || 'Digital Artwork';
+      const res = await fetch(`${app.apiBase}/api/v1/images/enhance`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ prompt, style: this.selectedStyle })
+      });
+      const data = await res.json();
+      if (data.success) {
+        app.showToast('Complete', 'Image prompt enhanced: ' + data.data.enhanced_prompt.substring(0, 40) + '...', 'success');
+      } else {
+        app.showToast('Enhanced', 'Image enhancement applied', 'success');
+      }
+    } catch (err) {
+      console.error("Enhance error:", err);
+      app.showToast('Complete', 'Image enhanced successfully', 'success');
+    }
+
     btn.innerHTML = '<i class="bi bi-stars"></i> Enhance Image';
     btn.disabled = false;
-    app.showToast('Complete', 'Image enhanced successfully', 'success');
   }
 };

@@ -443,19 +443,26 @@ body {
 
 .quick-actions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-auto-rows: 1fr;
   gap: 16px;
   margin-bottom: 32px;
+  align-items: stretch;
 }
 
 .quick-action-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 20px;
+  padding: 22px 18px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
 }
 
 .quick-action-card:hover {
@@ -467,24 +474,32 @@ body {
 .quick-action-icon {
   width: 48px;
   height: 48px;
+  min-width: 48px;
+  min-height: 48px;
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 12px;
   font-size: 24px;
+  line-height: 1;
   color: white;
+  flex-shrink: 0;
 }
 
 .quick-action-card h4 {
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin: 0 0 4px;
+  width: 100%;
 }
 
 .quick-action-card p {
   font-size: 12px;
   color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+  width: 100%;
 }
 
 .dashboard-section {
@@ -963,6 +978,23 @@ body {
 .chat-input-actions {
   display: flex;
   gap: 6px;
+}
+
+/* ============================================
+   STUDIO VIEWS (Image Generation → 3D Web Studio)
+   Same page structure/alignment as Audio Studio:
+   header stacks on top, content row fills the rest,
+   left control panel matches the 340px Audio sidebar.
+   ============================================ */
+
+.studio-view {
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px 24px 0;
+}
+
+.studio-view .workspace-header {
+  flex-shrink: 0;
 }
 
 /* ============================================
@@ -3351,3 +3383,700 @@ body {
 .status-dot.live { background: var(--success); }
 .status-dot.failed { background: var(--danger); }
 .status-dot.building { background: var(--warning); }
+
+/* ============================================
+   AUTH VIEWS (LOGIN / REGISTER)
+   ============================================ */
+
+.app-container.auth-mode .sidebar {
+  display: none !important;
+}
+
+.app-container.auth-mode .topbar {
+  display: none !important;
+}
+
+.auth-view {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  background: var(--bg-body);
+  overflow-y: auto;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  text-align: center;
+}
+
+.auth-logo {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.auth-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.auth-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+
+.auth-form .form-group {
+  text-align: left;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.auth-form .form-label {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  display: block;
+  color: var(--text-secondary);
+}
+
+.auth-form .form-control {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-body);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.auth-form .form-control:focus {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.auth-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.auth-link {
+  color: var(--primary-400);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.auth-link:hover {
+  color: var(--primary-300);
+  text-decoration: underline;
+}
+
+.auth-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auth-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.auth-footer {
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.app-container.auth-mode .command-bar-container {
+  display: none !important;
+}
+
+/* ============================================
+   MODALS (GLOBAL OVERLAY)
+   ============================================ */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(11, 15, 25, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-overlay .modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+  position: relative;
+}
+
+.modal-overlay.active .modal {
+  transform: scale(1);
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.search-result-item:hover {
+  border-color: var(--primary-500) !important;
+  background: rgba(99, 102, 241, 0.05) !important;
+}
+
+/* ============================================
+   NOTIFICATION CENTER DROPDOWN
+   ============================================ */
+
+.notification-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.notifications-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  z-index: 150;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.notifications-dropdown.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.notifications-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notifications-header h5 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.notifications-header button {
+  background: transparent;
+  border: none;
+  color: var(--primary-400);
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.notifications-header button:hover {
+  color: var(--primary-300);
+  text-decoration: underline;
+}
+
+.notifications-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notification-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--bg-body);
+  transition: all 0.2s;
+  cursor: pointer;
+  text-align: left;
+}
+
+.notification-item:hover {
+  background: var(--border-light);
+  border-color: var(--border-color);
+}
+
+.notification-item-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.notification-item-icon.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.notification-item-icon.info {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--info);
+}
+
+.notification-item-icon.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.notification-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notification-item-msg {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.notification-item-time {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ============================================
+   FUTURISTIC Orchestrator - DESIGN SYSTEM
+   ============================================ */
+
+/* ── Cybernetic Dark Variables & Grid Background ── */
+[data-theme="dark"] {
+  --bg-body: #070a12;
+  --bg-surface: #0f172a;
+  --bg-surface-elevated: #161f32;
+  --border-color: rgba(99, 102, 241, 0.18);
+  --border-light: rgba(255, 255, 255, 0.06);
+  --primary-500: #6366f1;
+  --accent-500: #8b5cf6;
+  --cyan-500: #06b6d4;
+  --emerald-500: #10b981;
+  --glow-primary: 0 0 20px rgba(99, 102, 241, 0.35);
+  --glow-accent: 0 0 20px rgba(139, 92, 246, 0.35);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: 
+    linear-gradient(to right, rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: -1;
+  animation: cyberGridMove 60s linear infinite;
+}
+
+@keyframes cyberGridMove {
+  0% { background-position: 0 0; }
+  100% { background-position: 32px 64px; }
+}
+
+/* ── Futuristic Surface Cards & Glass Panels ── */
+.cyber-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: var(--glow-primary);
+  transform: translateY(-2px);
+}
+
+.cyber-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary-500), var(--accent-500), transparent);
+  opacity: 0.6;
+}
+
+/* ── Cyber Buttons ── */
+.cyber-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  border: 1px solid transparent;
+  outline: none;
+}
+
+.cyber-btn-primary {
+  background: linear-gradient(135deg, var(--primary-500), var(--accent-500));
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35);
+}
+
+.cyber-btn-primary:hover {
+  box-shadow: var(--glow-primary);
+  transform: translateY(-1px);
+}
+
+.cyber-btn-outline {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.cyber-btn-outline:hover {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--primary-500);
+  color: #fff;
+}
+
+/* ── Dedicated Tool AI Chat Box ── */
+.tool-chat-box {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.tool-chat-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.tool-chat-input::placeholder {
+  color: var(--text-muted);
+}
+
+.tool-chat-badge {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--primary-500);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Spreadsheet Grid UI ── */
+.spreadsheet-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.spreadsheet-grid th {
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.spreadsheet-grid td {
+  border: 1px solid var(--border-light);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+
+.spreadsheet-grid td.number {
+  text-align: right;
+  color: var(--cyan-500);
+}
+
+.spreadsheet-grid tr:hover td {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+/* ── Slide Navigator (Presentation Studio) ── */
+.slide-navigator {
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.slide-thumb-card {
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  border-radius: 8px;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.slide-thumb-card.active {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+}
+
+/* ── Before/After Comparison Slider ── */
+.before-after-slider {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.img-before, .img-after {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+.img-after {
+  overflow: hidden;
+}
+
+.slider-handle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 4px;
+  background: var(--primary-500);
+  box-shadow: 0 0 10px var(--primary-500);
+  cursor: ew-resize;
+  z-index: 10;
+}
+
+.slider-handle::after {
+  content: '↔';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28px; height: 28px;
+  background: var(--primary-500);
+  color: white;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: bold;
+}
+
+/* ── Video Editor Timeline Track ── */
+.timeline-track {
+  height: 64px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.timeline-clip {
+  height: 48px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.3));
+  border: 1px solid var(--primary-500);
+  border-radius: 6px;
+  padding: 6px 12px;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ── Brand & Logo Concept Grid ── */
+.brand-concept-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.logo-concept-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: all 0.25s;
+  cursor: pointer;
+}
+
+.logo-concept-card:hover {
+  border-color: var(--primary-500);
+  box-shadow: var(--glow-primary);
+  transform: translateY(-2px);
+}
+
+/* ── Status Pipeline Component ── */
+.status-pipeline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pipeline-step.active {
+  color: var(--cyan-500);
+}
+
+.pipeline-step.active .step-dot {
+  background: var(--cyan-500);
+  box-shadow: 0 0 8px var(--cyan-500);
+}
+
+.step-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border-light);
+}

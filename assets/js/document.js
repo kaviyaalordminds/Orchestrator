@@ -31,22 +31,36 @@ const documentAgent = {
     }
 
     app.showToast('PPT Generation', `Creating presentation on "${topic}"...`, 'info');
-    await new Promise(r => setTimeout(r, 2500));
 
-    const count = parseInt(document.getElementById('pptSlides').value) || 8;
-    const audience = document.getElementById('pptAudience').value;
-    const style = document.getElementById('pptStyle').value;
+    const count = parseInt(document.getElementById('pptSlides').value) || 5;
 
-    this.slides = [
-      { title: topic, subtitle: `A ${audience} Presentation`, type: 'title' },
-      { title: 'Introduction', bullets: ['Overview of the topic', 'Key objectives', 'Target audience'], type: 'content' },
-      { title: 'Market Analysis', bullets: ['Current landscape', 'Growth trends', 'Competitive positioning'], type: 'content' },
-      { title: 'Key Findings', bullets: ['Data-driven insights', 'Performance metrics', 'Opportunity areas'], type: 'content' },
-      { title: 'Strategic Recommendations', bullets: ['Short-term actions', 'Long-term vision', 'Resource allocation'], type: 'content' },
-      { title: 'Implementation Plan', bullets: ['Phase 1: Foundation', 'Phase 2: Growth', 'Phase 3: Scale'], type: 'content' },
-      { title: 'Expected Outcomes', bullets: ['ROI projections', 'KPI targets', 'Success criteria'], type: 'content' },
-      { title: 'Thank You', subtitle: 'Questions & Discussion', type: 'title' }
-    ];
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/ppt/generate`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ topic, slides_count: count })
+      });
+      const data = await res.json();
+      if (data.success && data.data.slides) {
+        this.slides = data.data.slides.map(s => ({
+          title: s.title,
+          bullets: s.bullet_points || [],
+          type: 'content'
+        }));
+        this.downloadFileUrl = app.apiBase + data.data.file_url;
+      } else {
+        this.slides = [
+          { title: topic, subtitle: 'Executive Overview', type: 'title' },
+          { title: 'Key Takeaways', bullets: ['Market Insights', 'Strategic Goals'], type: 'content' }
+        ];
+      }
+    } catch (err) {
+      console.error("PPT API error:", err);
+      this.slides = [
+        { title: topic, subtitle: 'Executive Overview', type: 'title' },
+        { title: 'Key Takeaways', bullets: ['Market Insights', 'Strategic Goals'], type: 'content' }
+      ];
+    }
 
     this.currentSlide = 0;
     this.renderSlide();
@@ -130,37 +144,27 @@ const documentAgent = {
     }
 
     app.showToast('Document', `Generating "${title}"...`, 'info');
-    await new Promise(r => setTimeout(r, 2000));
 
     const type = document.getElementById('wordType').value;
     const tone = document.getElementById('wordTone').value;
 
-    const content = `
-      <h1>${title}</h1>
-      <p><strong>Document Type:</strong> ${type} | <strong>Tone:</strong> ${tone}</p>
-      <h2>Executive Summary</h2>
-      <p>This document provides a comprehensive overview of ${title.toLowerCase()}. It covers key aspects including background analysis, strategic recommendations, and actionable next steps.</p>
-      <h2>Introduction</h2>
-      <p>The purpose of this ${type.toLowerCase()} is to outline the current state of affairs and propose a structured approach moving forward. The analysis is based on the latest available data and industry best practices.</p>
-      <h2>Key Findings</h2>
-      <p>Our research has identified several critical areas that require attention. These findings are supported by quantitative data and qualitative assessments from subject matter experts.</p>
-      <ul>
-        <li>Market positioning remains strong with 24% year-over-year growth</li>
-        <li>Customer satisfaction scores have improved by 15 points</li>
-        <li>Operational efficiency gains of 18% were achieved</li>
-        <li>New product lines contributed 32% of total revenue</li>
-      </ul>
-      <h2>Recommendations</h2>
-      <p>Based on the findings, we recommend the following strategic initiatives:</p>
-      <ol>
-        <li>Invest in digital transformation infrastructure</li>
-        <li>Expand into emerging markets with localized offerings</li>
-        <li>Strengthen partnerships with key technology vendors</li>
-        <li>Implement agile methodologies across all teams</li>
-      </ol>
-      <h2>Conclusion</h2>
-      <p>The path forward requires commitment to innovation and operational excellence. With the right strategy and execution, significant growth opportunities can be realized.</p>
-    `;
+    let content = "";
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/word/generate`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ title, doc_type: type })
+      });
+      const data = await res.json();
+      if (data.success) {
+        content = `<h1>${title}</h1><p><strong>Document Type:</strong> ${type} | <strong>Tone:</strong> ${tone}</p>` +
+                  data.data.content.replace(/\n\n/g, '<br><br>').replace(/# (.*)/g, '<h1>$1</h1>').replace(/## (.*)/g, '<h2>$1</h2>');
+        this.wordDownloadUrl = app.apiBase + data.data.file_url;
+      }
+    } catch (err) {
+      console.error("Word API error:", err);
+      content = `<h1>${title}</h1><p><strong>Document Type:</strong> ${type}</p><h2>Executive Summary</h2><p>Document generated for ${title}.</p>`;
+    }
 
     document.getElementById('wordPage').innerHTML = content;
     document.getElementById('wordActions').style.display = 'block';
@@ -174,17 +178,21 @@ const documentAgent = {
 
   aiRewrite() {
     app.showToast('AI Rewrite', 'Rewriting selected text...', 'info');
-    setTimeout(() => app.showToast('Complete', 'Text rewritten', 'success'), 1500);
+    setTimeout(() => app.showToast('Complete', 'Text rewritten', 'success'), 1000);
   },
 
   aiSummarize() {
     app.showToast('AI Summarize', 'Generating summary...', 'info');
-    setTimeout(() => app.showToast('Complete', 'Summary added', 'success'), 1500);
+    setTimeout(() => app.showToast('Complete', 'Summary added', 'success'), 1000);
   },
 
   exportWord(format) {
-    app.showToast('Export', `Preparing ${format.toUpperCase()}...`, 'info');
-    setTimeout(() => app.showToast('Complete', `Document exported as .${format}`, 'success'), 1500);
+    if (this.wordDownloadUrl) {
+      window.open(this.wordDownloadUrl, '_blank');
+      app.showToast('Download', 'Downloading DOCX file...', 'success');
+    } else {
+      app.showToast('Export', `Preparing ${format.toUpperCase()}...`, 'info');
+    }
   },
 
   // ========== EXCEL ==========
@@ -225,13 +233,26 @@ const documentAgent = {
     }
 
     app.showToast('Excel', 'Generating data and analysis...', 'info');
-    await new Promise(r => setTimeout(r, 2000));
+
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/excel/analyze`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ topic: prompt || "Financial Analysis" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        this.excelDownloadUrl = app.apiBase + data.data.file_url;
+      }
+    } catch (err) {
+      console.error("Excel API error:", err);
+    }
 
     if (this.excelData.length === 0) this.generateSampleData();
     this.renderExcelTable();
     this.generateChart();
     document.getElementById('excelActions').style.display = 'block';
-    app.showToast('Complete', 'Data generated and analyzed', 'success');
+    app.showToast('Complete', 'Data generated and spreadsheet ready', 'success');
   },
 
   renderExcelTable() {

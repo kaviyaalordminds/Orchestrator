@@ -25,6 +25,15 @@ const chatAgent = {
     if (!document.getElementById('chatMessages') || !document.getElementById('conversationList')) return;
     this.renderConversationList();
     this.newConversation();
+
+    // Auto-grow the chat textarea
+    const textarea = document.getElementById('chatInput');
+    if (textarea) {
+      textarea.addEventListener('input', function () {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+      });
+    }
   },
 
   onActivate() {
@@ -128,11 +137,18 @@ const chatAgent = {
       content = content.replace(/\* ([^\n]+)/g, '<li>$1</li>');
       content = content.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
 
+      let sourcesHtml = '';
+      if (!isUser && msg.sources && msg.sources.length > 0) {
+        const badges = msg.sources.map(s => `<span class="tool-chip" style="font-size:0.75rem;padding:2px 8px;margin-right:4px;"><i class="bi bi-journal-text"></i> ${s.source_path}</span>`).join('');
+        sourcesHtml = `<div style="margin-top:8px;font-size:0.8rem;color:var(--text-muted);"><strong>Sources:</strong><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${badges}</div></div>`;
+      }
+
       return `
         <div class="message ${isUser ? 'user' : 'ai'}">
           <div class="message-avatar" ${avatarClass}>${avatar}</div>
           <div class="message-content">
             <div>${content}</div>
+            ${sourcesHtml}
             ${!isUser ? `
               <div class="message-actions">
                 <button class="msg-action-btn" onclick="chatAgent.copyMessage(${idx})"><i class="bi bi-copy"></i> Copy</button>
@@ -149,7 +165,8 @@ const chatAgent = {
   },
 
   handleKeydown(e) {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    // Enter sends the message; Shift+Enter (or Ctrl/Cmd+Enter) inserts a newline.
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       this.sendMessage();
     }
@@ -184,11 +201,33 @@ const chatAgent = {
     `;
     container.scrollTop = container.scrollHeight;
 
-    await new Promise(r => setTimeout(r, 1500));
+    let response = "";
+    try {
+      const apiMsgs = this.messages.map(m => ({
+        role: m.role === 'ai' || m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content
+      }));
+      const res = await fetch(`${app.apiBase}/api/v1/chat`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ messages: apiMsgs })
+      });
+      const data = await res.json();
+      let sources = [];
+      if (data.success) {
+        response = data.data.reply;
+        sources = data.data.sources || [];
+      } else {
+        response = "Sorry, I encountered an error: " + (data.error?.message || "Generation failed");
+      }
+    } catch (err) {
+      console.error("Chat API error:", err);
+      response = this.generateResponse(text);
+    }
 
-    const response = this.generateResponse(text);
-    document.getElementById(typingId).remove();
-    this.messages.push({ role: 'ai', content: response });
+    const typingEl = document.getElementById(typingId);
+    if (typingEl) typingEl.remove();
+    this.messages.push({ role: 'ai', content: response, sources: sources });
     this.renderMessages();
 
     // Save to conversation

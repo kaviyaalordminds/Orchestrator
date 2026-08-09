@@ -47,7 +47,6 @@ const posterAgent = {
     btn.disabled = true;
 
     app.showToast('Poster Design', 'AI is designing your poster...', 'info');
-    await new Promise(r => setTimeout(r, 2500));
 
     const type = document.getElementById('posterType').value;
     const style = document.getElementById('posterStyle').value;
@@ -57,6 +56,20 @@ const posterAgent = {
     const desc = document.getElementById('posterDesc').value;
     const c1 = document.getElementById('posterColor1').value;
     const c2 = document.getElementById('posterColor2').value;
+
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/posters/generate`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ title, subtitle: desc, style, theme: `${c1}, ${c2}` })
+      });
+      const data = await res.json();
+      if (data.success && data.data.url) {
+        this.generatedPosterUrl = data.data.url;
+      }
+    } catch (err) {
+      console.error("Poster API error:", err);
+    }
 
     const canvas = document.getElementById('posterCanvas');
     canvas.innerHTML = `

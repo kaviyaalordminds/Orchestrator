@@ -53,16 +53,39 @@ const websiteAgent = {
     btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Building...';
     btn.disabled = true;
 
-    app.showToast('Website Generation', `Building "${name}"...`, 'info');
-    await new Promise(r => setTimeout(r, 3000));
+    app.showToast('Website Creation', `Building website for "${name}"...`, 'info');
+
+    const prompt = document.getElementById('webPrompt')?.value || '';
+    const theme = document.getElementById('webTheme')?.value || 'dark';
+    const framework = document.getElementById('webFramework')?.value || 'vanilla';
+
+    let html = "";
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/websites/generate`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ name, prompt, theme, framework, mode: 'standard' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        html = data.data.code;
+        this.previewUrl = app.apiBase + data.data.preview_url;
+        this.zipUrl = app.apiBase + data.data.zip_url;
+      }
+    } catch (err) {
+      console.error("Website API error:", err);
+    }
+    const c1 = document.getElementById('webColor1').value;
+    const c2 = document.getElementById('webColor2').value;
 
     const type = document.getElementById('webBusinessType').value;
     const style = document.getElementById('webStyle').value;
     const mode = document.getElementById('webMode').value;
-    const c1 = document.getElementById('webColor1').value;
-    const c2 = document.getElementById('webColor2').value;
 
-    const html = this.generateWebsiteHTML(name, type, style, mode, c1, c2);
+    if (!html) {
+      html = this.generateWebsiteHTML(name, type, style, mode, c1, c2);
+    }
+    
     this.generatedCode = html;
 
     const frame = document.getElementById('webPreviewFrame');

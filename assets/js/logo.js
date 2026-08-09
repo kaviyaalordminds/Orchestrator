@@ -47,12 +47,25 @@ const logoAgent = {
     btn.disabled = true;
 
     app.showToast('Logo Creation', `Generating concepts for "${company}"...`, 'info');
-    await new Promise(r => setTimeout(r, 2500));
 
     const count = parseInt(document.getElementById('logoCount').value) || 4;
     const style = document.getElementById('logoStyle').value;
     const industry = document.getElementById('logoIndustry').value;
-    const bg = document.getElementById('logoBackground').value;
+
+    let realLogoUrl = "";
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/logos/generate`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ company_name: company, tagline: "", style, industry })
+      });
+      const data = await res.json();
+      if (data.success && data.data.url) {
+        realLogoUrl = data.data.url;
+      }
+    } catch (err) {
+      console.error("Logo API error:", err);
+    }
 
     const gradients = [
       'linear-gradient(135deg,#6366f1,#8b5cf6)',

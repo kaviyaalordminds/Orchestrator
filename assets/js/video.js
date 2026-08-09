@@ -71,13 +71,30 @@ const videoAgent = {
     badge.className = 'video-status-badge status-processing';
     badge.textContent = 'Processing';
 
+    let jobId = null;
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/videos/generate`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({
+          prompt: prompt,
+          style: this.selectedStyle,
+          resolution: document.getElementById('videoResolution')?.value || '1080p',
+          duration: parseInt(document.getElementById('videoDuration')?.value) || 5
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        jobId = data.data.job_id;
+      }
+    } catch (err) {
+      console.error("Video API error:", err);
+    }
+
     const stages = [
-      { pct: 5, msg: 'Validating request...', delay: 800 },
-      { pct: 15, msg: 'Generating video plan...', delay: 1200 },
-      { pct: 30, msg: 'AI Video Agent processing...', delay: 2000 },
-      { pct: 55, msg: 'Rendering frames...', delay: 2500 },
-      { pct: 75, msg: 'Encoding video...', delay: 1800 },
-      { pct: 90, msg: 'Quality validation...', delay: 1200 },
+      { pct: 15, msg: 'Job created in backend queue...', delay: 800 },
+      { pct: 40, msg: 'Processing video frames...', delay: 1500 },
+      { pct: 75, msg: 'Rendering final output...', delay: 1500 },
       { pct: 100, msg: 'Complete', delay: 800 }
     ];
 
@@ -88,14 +105,28 @@ const videoAgent = {
       detail.textContent = stage.msg;
     }
 
+    let finalVideoUrl = "";
+    if (jobId) {
+      try {
+        const res = await fetch(`${app.apiBase}/api/v1/videos/${jobId}`);
+        const data = await res.json();
+        if (data.success && data.data.video_url) {
+          finalVideoUrl = data.data.video_url;
+        }
+      } catch (err) {
+        console.error("Status poll error:", err);
+      }
+    }
+
     badge.className = 'video-status-badge status-completed';
     badge.textContent = 'Completed';
     previewBox.innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);">
-        <i class="bi bi-camera-reels" style="font-size:64px;margin-bottom:16px;color:var(--primary-500);"></i>
-        <h3 style="font-size:20px;color:var(--text-primary);margin-bottom:8px;">Video Generated</h3>
-        <p>"${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"</p>
-        <p style="font-size:12px;margin-top:8px;">${document.getElementById('videoDuration').value}s · ${this.currentRatio} · ${document.getElementById('videoResolution').value}</p>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);padding:20px;">
+        ${finalVideoUrl ? `<video src="${finalVideoUrl}" controls autoplay loop style="max-width:100%;max-height:80%;border-radius:12px;"></video>` : `
+          <i class="bi bi-camera-reels" style="font-size:64px;margin-bottom:16px;color:var(--primary-500);"></i>
+          <h3 style="font-size:20px;color:var(--text-primary);margin-bottom:8px;">Video Job Completed</h3>
+          <p>"${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"</p>
+        `}
       </div>
     `;
 
@@ -104,7 +135,7 @@ const videoAgent = {
     btn.disabled = false;
     this.isGenerating = false;
 
-    app.showToast('Video Ready', 'Your AI-generated video is complete', 'success');
+    app.showToast('Video Ready', 'Your AI-generated video job completed', 'success');
   },
 
   regenerate() {

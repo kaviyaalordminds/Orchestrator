@@ -6,8 +6,112 @@
 const website3dAgent = {
   currentTab: 'build',
   generatedCode: '',
+  _threeRenderer: null,
+  _threeAnimId: null,
 
-  onActivate() {},
+  onActivate() {
+    // Only initialise the preview scene once per page load
+    const container = document.getElementById('threePreviewContainer');
+    if (!container) return;
+
+    // If a generated iframe already occupies the container, leave it alone
+    if (container.querySelector('iframe')) return;
+
+    // If we already mounted a canvas, nothing more to do
+    if (this._threeRenderer) return;
+
+    // Guard: THREE must be loaded
+    if (typeof THREE === 'undefined') return;
+
+    // ── Scene ────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+
+    // ── Camera ───────────────────────────────────────────────────
+    const w = container.clientWidth || 400;
+    const h = container.clientHeight || 300;
+    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
+    camera.position.z = 5;
+
+    // ── Renderer ─────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(w, h);
+    renderer.setClearColor(0x000000, 0);
+    this._threeRenderer = renderer;
+
+    // Replace placeholder empty-state with canvas
+    container.innerHTML = '';
+    container.style.background = 'radial-gradient(ellipse at center, #0d1020 0%, #0b0f19 100%)';
+    container.appendChild(renderer.domElement);
+    renderer.domElement.style.width  = '100%';
+    renderer.domElement.style.height = '100%';
+
+    // ── Main mesh — wireframe icosahedron ─────────────────────────
+    const c1 = document.getElementById('threeColor1')?.value || '#6366f1';
+    const geo  = new THREE.IcosahedronGeometry(1.4, 1);
+    const mat  = new THREE.MeshBasicMaterial({ color: c1, wireframe: true, transparent: true, opacity: 0.85 });
+    const mesh = new THREE.Mesh(geo, mat);
+    scene.add(mesh);
+
+    // ── Secondary floating sphere ─────────────────────────────────
+    const c2   = document.getElementById('threeColor2')?.value || '#8b5cf6';
+    const geo2 = new THREE.IcosahedronGeometry(0.7, 1);
+    const mat2 = new THREE.MeshBasicMaterial({ color: c2, wireframe: true, transparent: true, opacity: 0.5 });
+    const mesh2 = new THREE.Mesh(geo2, mat2);
+    mesh2.position.set(2.2, 0.8, -1.5);
+    scene.add(mesh2);
+
+    // ── Particle field ────────────────────────────────────────────
+    const c3      = document.getElementById('threeColor3')?.value || '#06b6d4';
+    const pCount  = 1500;
+    const pGeo    = new THREE.BufferGeometry();
+    const pPos    = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount * 3; i++) pPos[i] = (Math.random() - 0.5) * 18;
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const pMat = new THREE.PointsMaterial({ color: c3, size: 0.04, transparent: true, opacity: 0.55 });
+    const particles = new THREE.Points(pGeo, pMat);
+    scene.add(particles);
+
+    // ── Mouse parallax ────────────────────────────────────────────
+    let mx = 0, my = 0;
+    const onMouseMove = (e) => {
+      const rect = container.getBoundingClientRect();
+      mx = ((e.clientX - rect.left) / rect.width  - 0.5) * 2;
+      my = ((e.clientY - rect.top)  / rect.height - 0.5) * 2;
+    };
+    container.addEventListener('mousemove', onMouseMove);
+
+    // ── Resize observer ───────────────────────────────────────────
+    const ro = new ResizeObserver(() => {
+      const nw = container.clientWidth;
+      const nh = container.clientHeight;
+      camera.aspect = nw / nh;
+      camera.updateProjectionMatrix();
+      renderer.setSize(nw, nh);
+    });
+    ro.observe(container);
+
+    // ── Animation loop ────────────────────────────────────────────
+    const clock = new THREE.Clock();
+    const animate = () => {
+      this._threeAnimId = requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      mesh.rotation.x  = t * 0.18;
+      mesh.rotation.y  = t * 0.28;
+      mesh2.rotation.x = -t * 0.22;
+      mesh2.rotation.y =  t * 0.35;
+      particles.rotation.y = t * 0.04;
+
+      // Subtle camera drift following mouse
+      camera.position.x += (mx * 0.6 - camera.position.x) * 0.04;
+      camera.position.y += (-my * 0.4 - camera.position.y) * 0.04;
+      camera.lookAt(scene.position);
+
+      renderer.render(scene, camera);
+    };
+    animate();
+  },
 
   switchTab(tab) {
     document.querySelectorAll('#view-website3d .website-tab').forEach(t => t.classList.remove('active'));
@@ -28,7 +132,6 @@ const website3dAgent = {
     btn.disabled = true;
 
     app.showToast('3D Website', `Building immersive "${name}"...`, 'info');
-    await new Promise(r => setTimeout(r, 3500));
 
     const c1 = document.getElementById('threeColor1').value;
     const c2 = document.getElementById('threeColor2').value;
@@ -39,14 +142,40 @@ const website3dAgent = {
     const hasMouse = document.getElementById('threeMouse').checked;
     const hasScroll = document.getElementById('threeScroll').checked;
 
-    const html = this.generate3DHTML(name, c1, c2, c3, hasHero, hasParticles, hasGlobe, hasMouse, hasScroll);
+    let html = "";
+    try {
+      const res = await fetch(`${app.apiBase}/api/v1/websites/generate`, {
+        method: 'POST',
+        headers: app.getAuthHeaders(),
+        body: JSON.stringify({ name, prompt: `3D Site with colors ${c1}, ${c2}, ${c3}`, mode: '3d' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        html = data.data.code;
+      }
+    } catch (err) {
+      console.error("3D Website API error:", err);
+    }
+
+    if (!html) {
+      html = this.generate3DHTML(name, c1, c2, c3, hasHero, hasParticles, hasGlobe, hasMouse, hasScroll);
+    }
     this.generatedCode = html;
 
+    // Stop the live preview scene before injecting the iframe
+    if (this._threeAnimId) {
+      cancelAnimationFrame(this._threeAnimId);
+      this._threeAnimId = null;
+    }
+    if (this._threeRenderer) {
+      this._threeRenderer.dispose();
+      this._threeRenderer = null;
+    }
+
     const container = document.getElementById('threePreviewContainer');
+    container.style.background = '';
     container.innerHTML = '<iframe id="threePreviewFrame" class="preview-iframe" title="3D preview" style="width:100%;height:100%;border:none;"></iframe>';
     container.querySelector('iframe').srcdoc = html;
-
-    document.getElementById('threePreviewFrame').srcdoc = html;
 
     btn.innerHTML = '<i class="bi bi-magic"></i> Generate 3D Website';
     btn.disabled = false;
