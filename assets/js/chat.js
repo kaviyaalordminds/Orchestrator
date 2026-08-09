@@ -202,6 +202,7 @@ const chatAgent = {
     container.scrollTop = container.scrollHeight;
 
     let response = "";
+    let sources = [];
     try {
       const apiMsgs = this.messages.map(m => ({
         role: m.role === 'ai' || m.role === 'assistant' ? 'assistant' : 'user',
@@ -213,12 +214,11 @@ const chatAgent = {
         body: JSON.stringify({ messages: apiMsgs })
       });
       const data = await res.json();
-      let sources = [];
       if (data.success) {
         response = data.data.reply;
         sources = data.data.sources || [];
       } else {
-        response = "Sorry, I encountered an error: " + (data.error?.message || "Generation failed");
+        response = "Sorry, I encountered an error: " + (data.error?.message || data.detail || "Generation failed");
       }
     } catch (err) {
       console.error("Chat API error:", err);

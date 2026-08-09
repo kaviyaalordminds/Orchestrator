@@ -50,12 +50,14 @@ Existing Obsidian REST API → Markdown Parser → Semantic Chunker → Embeddin
 
 | Rule | Status |
 |------|--------|
-| Vault location unchanged | ✅ `/Users/bharath/Documents/Obsidian Vault` |
+| Vault location unchanged | ✅ your vault stays wherever Obsidian points it; this project never copies or moves it |
 | Vault not copied into project | ✅ |
 | Existing Obsidian plugin untouched | ✅ `obsidian-local-rest-api` v5.1.0 |
 | No new MCP server installed | ✅ REST API used directly |
 | Existing `/api/v1/chat` preserved | ✅ |
-| No credentials committed | ✅ `.env` is gitignored |
+| No credentials committed | ✅ `.env` is gitignored (see note below if you're on a checkout from before this was fixed) |
+
+> **If you cloned this repo before `.gitignore` was added:** `backend/.env` with a real Obsidian API key was previously committed (visible in git history). Rotate that key in Obsidian → Settings → Local REST API — removing the file from tracking does not erase it from history.
 
 ---
 
@@ -166,7 +168,25 @@ All settings are in `backend/.env` (never commit this file):
 | `RAG_TOP_K` | Chunks returned per query | `5` |
 | `RAG_CHUNK_SIZE` | Words per chunk | `500` |
 | `RAG_CHUNK_OVERLAP` | Words of overlap between chunks | `100` |
+| `RAG_MIN_SCORE` | Minimum cosine similarity to count a vector match as relevant | `0.35` |
 | `ADMIN_API_KEY` | Protects `/rag/index` and `/rag/reindex` | _(set in production)_ |
+| `OBSIDIAN_ONLY` | If true, chat answers only from vault context; returns `INSUFFICIENT_VAULT_CONTEXT` otherwise instead of letting the LLM guess | `true` |
+
+`QDRANT_LOCATION` is optional — if unset it defaults to `backend/data/qdrant` automatically (see `app/config.py`). Only set it if you want the index stored somewhere else, and never hardcode a personal machine path there.
+
+---
+
+## Diagnostics
+
+Run a full connectivity check (environment, Obsidian, vault list/read/search, AI agent) with real calls — not just config presence:
+
+```bash
+cd backend
+source venv/bin/activate
+python -m tools.diagnose
+```
+
+Prints PASS/FAIL per check and exits non-zero if anything fails.
 
 ---
 
@@ -179,12 +199,9 @@ pytest tests/ -v
 ```
 
 **Test coverage:**
-- Obsidian REST API connection, authentication, note reading, search
-- Markdown parsing: frontmatter, tags, headings, Unicode, empty notes
-- Chunking: section splitting, overlap, metadata preservation, idempotency
-- Vector store: upsert, search, delete, idempotency
-- RAG service: full indexing, incremental indexing, retrieval, chat completion
-- Security: source path exposure, bad API key rejection
+- `tests/test_rag.py` — requires a **real, running Obsidian** with the Local REST API plugin enabled and a vault containing an `AI-OS/README.md` note; these tests hit `https://127.0.0.1:27124` for real and will fail (by design — that's a true connectivity check, not a mock) if Obsidian isn't running.
+- `tests/test_obsidian_integration.py` — runs without any external dependency, using an in-process fake Obsidian server that reproduces the real Local REST API contract. Covers: health/auth, list/read/search, note metadata, path-traversal rejection, and a full end-to-end RAG pipeline test including the `INSUFFICIENT_VAULT_CONTEXT` negative case.
+- Markdown parsing, chunking, vector store: as before.
 
 ---
 
@@ -195,8 +212,9 @@ pytest tests/ -v
 | `Connection refused` on port 8000 | Backend not running | `bash backend/start.sh` |
 | `authenticated: false` | Wrong `OBSIDIAN_API_KEY` | Copy key from Obsidian → Settings → Local REST API |
 | `points_count: 0` | Vault not yet indexed | `POST /api/v1/rag/index` |
-| No sources returned | Query term not in vault | Try `/api/v1/rag/search?query=…` to debug |
+| No sources returned / `INSUFFICIENT_VAULT_CONTEXT` | Query term not in vault, or below `RAG_MIN_SCORE` | Try `/api/v1/rag/search?query=…` to debug; lower `RAG_MIN_SCORE` if real matches are being filtered out |
 | Obsidian API unreachable | Obsidian app not open | Open Obsidian on your Mac |
+| Chat UI shows nothing after "typing…" | Old `sources` scoping bug in `chat.js` (fixed) | Update to latest `assets/js/chat.js` |
 | Slow first response | Qdrant loading index | Warm-up happens once on startup |
 | LLM returns no reply | Ollama model not pulled | `ollama pull llama3 && ollama pull nomic-embed-text` |
 
@@ -232,8 +250,11 @@ Orchestrator/
 │   │       └── rag_service.py  # RAG orchestrator (index, retrieve, chat)
 │   ├── data/
 │   │   └── qdrant/             # Persistent vector storage (gitignored)
+│   ├── tools/
+│   │   └── diagnose.py         # python -m tools.diagnose — real connectivity check
 │   └── tests/
-│       └── test_rag.py         # Comprehensive test suite
+│       ├── test_rag.py                    # requires a real, running Obsidian
+│       └── test_obsidian_integration.py   # runs standalone (fake Obsidian server)
 └── README.md                   # This file
 ```
 
